@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Inventario de Repuestos de Vehículos</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    input, button {
+      margin: 5px;
+      padding: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    h3 {
+      margin-top: 40px;
+      border-bottom: 2px solid #333;
+      padding-bottom: 5px;
+    }
+    td[contenteditable="true"] {
+      background-color: #fffbe6;
+      cursor: pointer;
+    }
+    #totalGlobal {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🚗 Inventario de Repuestos de Vehículos</h2>
+
+  <input type="text" id="marca" placeholder="Marca (ej. Toyota)">
+  <input type="text" id="tipo" placeholder="Tipo de repuesto (ej. Bolsas de Aire)">
+  <input type="number" id="cantidad" placeholder="Cantidad">
+  <input type="number" id="precio" placeholder="Precio unitario (Q)">
+  <button onclick="agregarRepuesto()">Agregar repuesto</button>
+
+  <br><input type="text" id="buscar" placeholder="Buscar por marca o tipo" onkeyup="filtrarRepuestos()">
+
+  <div id="contenidoInventario"></div>
+
+  <div id="totalGlobal"></div>
+
+  <script>
+    let repuestos = JSON.parse(localStorage.getItem("repuestos") || "[]");
+
+    function guardar() {
+      localStorage.setItem("repuestos", JSON.stringify(repuestos));
+    }
+
+    function agregarRepuesto() {
+      const marca = document.getElementById("marca").value.trim();
+      const tipo = document.getElementById("tipo").value.trim();
+      const cantidad = parseInt(document.getElementById("cantidad").value);
+      const precio = parseFloat(document.getElementById("precio").value);
+
+      if (!marca || !tipo || isNaN(cantidad) || isNaN(precio)) {
+        alert("Por favor completa todos los campos correctamente.");
+        return;
+      }
+
+      repuestos.push({ marca, tipo, cantidad, precio });
+      guardar();
+      mostrarRepuestos();
+      document.getElementById("marca").value = "";
+      document.getElementById("tipo").value = "";
+      document.getElementById("cantidad").value = "";
+      document.getElementById("precio").value = "";
+    }
+
+    function mostrarRepuestos(filtro = "") {
+      const contenedor = document.getElementById("contenidoInventario");
+      contenedor.innerHTML = "";
+      const tiposAgrupados = {};
+
+      // Agrupar por tipo
+      repuestos.forEach(r => {
+        if (
+          r.tipo &&
+          (r.marca.toLowerCase().includes(filtro) ||
+          r.tipo.toLowerCase().includes(filtro))
+        ) {
+          if (!tiposAgrupados[r.tipo]) {
+            tiposAgrupados[r.tipo] = [];
+          }
+          tiposAgrupados[r.tipo].push(r);
+        }
+      });
+
+      let totalGeneral = 0;
+
+      for (let tipo in tiposAgrupados) {
+        const lista = tiposAgrupados[tipo];
+        let subtotal = 0;
+
+        const tabla = document.createElement("table");
+        tabla.innerHTML = `
+          <thead>
+            <tr>
+              <th>Marca</th>
+              <th>Cantidad</th>
+              <th>Precio Unitario (Q)</th>
+              <th>Total (Q)</th>
+              <th>Eliminar</th>
+            </tr>
+          </thead>
+        `;
+
+        const cuerpo = document.createElement("tbody");
+
+        lista.forEach((r, index) => {
+          const total = r.cantidad * r.precio;
+          subtotal += total;
+          const fila = document.createElement("tr");
+
+          fila.innerHTML = `
+            <td contenteditable="true" onblur="editarCampo(${repuestos.indexOf(r)}, 'marca', this.innerText)">${r.marca}</td>
+            <td contenteditable="true" onblur="editarCampo(${repuestos.indexOf(r)}, 'cantidad', this.innerText)">${r.cantidad}</td>
+            <td contenteditable="true" onblur="editarCampo(${repuestos.indexOf(r)}, 'precio', this.innerText)">${r.precio.toFixed(2)}</td>
+            <td><strong>Q${total.toFixed(2)}</strong></td>
+            <td><button onclick="eliminar(${repuestos.indexOf(r)})">🗑️</button></td>
+          `;
+          cuerpo.appendChild(fila);
+        });
+
+        tabla.appendChild(cuerpo);
+        contenedor.innerHTML += `<h3>${tipo}</h3>`;
+        contenedor.appendChild(tabla);
+        contenedor.innerHTML += `<p><strong>Subtotal: Q${subtotal.toFixed(2)}</strong></p>`;
+        totalGeneral += subtotal;
+      }
+
+      document.getElementById("totalGlobal").innerHTML =
+        totalGeneral > 0
+          ? `🧮 Total del inventario: <strong>Q${totalGeneral.toFixed(2)}</strong>`
+          : "";
+    }
+
+    function eliminar(index) {
+      if (confirm("¿Eliminar este repuesto?")) {
+        repuestos.splice(index, 1);
+        guardar();
+        mostrarRepuestos();
+      }
+    }
+
+    function editarCampo(index, campo, valor) {
+      if (campo === "cantidad" || campo === "precio") {
+        valor = parseFloat(valor);
+        if (isNaN(valor)) {
+          alert("Por favor ingresa un número válido.");
+          mostrarRepuestos(); // revertir cambio
+          return;
+        }
+      } else {
+        valor = valor.trim();
+      }
+      repuestos[index][campo] = valor;
+      guardar();
+      mostrarRepuestos();
+    }
+
+    function filtrarRepuestos() {
+      const filtro = document.getElementById("buscar").value.toLowerCase();
+      mostrarRepuestos(filtro);
+    }
+
+    mostrarRepuestos(); // al cargar
+  </script>
+<!-- Botones de exportación -->
+<hr>
+<h3>📤 Exportar / Guardar respaldo</h3>
+<button onclick="exportarExcel()">📁 Exportar a Excel</button>
+<button onclick="exportarPDF()">📄 Exportar a PDF</button>
+<button onclick="descargarJSON()">📝 Guardar respaldo (.json)</button>
+<input type="file" accept=".json" onchange="cargarJSON(this)" />
+<button onclick="if(confirm('¿Borrar todo el inventario?')){localStorage.removeItem('repuestos');location.reload();}">🗑️ Borrar todo</button>
+
+<!-- Librerías necesarias -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+  function exportarExcel() {
+    const datos = [["Marca", "Tipo", "Cantidad", "Precio Unitario", "Total"]];
+    repuestos.forEach(r => {
+      datos.push([
+        r.marca,
+        r.tipo,
+        r.cantidad,
+        `Q${r.precio.toFixed(2)}`,
+        `Q${(r.cantidad * r.precio).toFixed(2)}`
+      ]);
+    });
+
+    const hoja = XLSX.utils.aoa_to_sheet(datos);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, "Inventario");
+    XLSX.writeFile(libro, "Inventario.xlsx");
+  }
+
+  async function exportarPDF() {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF();
+    let y = 10;
+
+    pdf.setFontSize(14);
+    pdf.text("Inventario de Repuestos", 10, y);
+    y += 10;
+
+    repuestos.forEach((r, i) => {
+      const total = r.cantidad * r.precio;
+      pdf.setFontSize(1
+
+</body>
+</html>
